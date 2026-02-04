@@ -12,7 +12,7 @@ Initial code-chat implementation with WebSocket server, PTY management, and chat
 
 ## 🏁 Milestone 2: Weldr Integration
 
-### T2: Start weldr daemon with server @claude
+### T2: Start weldr daemon with server @claude ✅ (done: 2026-02-04, 0ddfdd5)
 **Depends:** T1
 **Artifacts:** src/weldr.js, src/server.js (modified)
 **Commit:** `feat: weldr daemon integration`
