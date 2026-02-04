@@ -7,6 +7,12 @@ import { dirname, join } from 'path';
 import { readFileSync, existsSync } from 'fs';
 import { execFile } from 'child_process';
 import { WeldrManager } from './weldr.js';
+import {
+  normalizeAuthConfig,
+  isValidKey,
+  getKeyFromHttpRequest,
+  getKeyFromWebSocketRequest,
+} from './auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -16,6 +22,11 @@ let config = { projects: [], port: 3000 };
 if (existsSync(configPath)) {
   config = JSON.parse(readFileSync(configPath, 'utf-8'));
 }
+const authConfig = normalizeAuthConfig(config);
+
+if (authConfig.enabled && authConfig.keys.length === 0) {
+  console.warn('[auth] Enabled, but no keys configured. All requests will be rejected.');
+}
 
 const app = express();
 const server = createServer(app);
@@ -24,8 +35,26 @@ const wss = new WebSocketServer({ server });
 // Serve static files
 app.use(express.static(join(__dirname, '../public')));
 
+// API: Auth status
+app.get('/api/auth', (req, res) => {
+  res.json({ enabled: authConfig.enabled });
+});
+
+function requireAuth(req, res, next) {
+  if (!authConfig.enabled) {
+    return next();
+  }
+
+  const key = getKeyFromHttpRequest(req);
+  if (isValidKey(authConfig, key)) {
+    return next();
+  }
+
+  res.status(401).json({ error: 'Unauthorized' });
+}
+
 // API: List projects
-app.get('/api/projects', (req, res) => {
+app.get('/api/projects', requireAuth, (req, res) => {
   res.json(config.projects.map(p => ({
     id: p.id,
     name: p.name,
@@ -34,7 +63,7 @@ app.get('/api/projects', (req, res) => {
 });
 
 // API: Get weldr sync status for a project
-app.get('/api/projects/:id/sync-status', async (req, res) => {
+app.get('/api/projects/:id/sync-status', requireAuth, async (req, res) => {
   const project = config.projects.find(p => p.id === req.params.id);
   if (!project) {
     return res.status(404).json({ error: 'Project not found' });
@@ -74,9 +103,24 @@ app.get('/api/projects/:id/sync-status', async (req, res) => {
 // Track active PTY sessions
 const sessions = new Map();
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   let currentPty = null;
   let currentProjectId = null;
+  let isAuthenticated = !authConfig.enabled;
+
+  if (authConfig.enabled) {
+    const key = getKeyFromWebSocketRequest(req);
+    if (key) {
+      if (isValidKey(authConfig, key)) {
+        isAuthenticated = true;
+      } else {
+        ws.close(1008, 'Invalid API key');
+        return;
+      }
+    } else {
+      ws.send(JSON.stringify({ type: 'auth_required', message: 'API key required' }));
+    }
+  }
 
   ws.on('message', (raw) => {
     let msg;
@@ -84,6 +128,23 @@ wss.on('connection', (ws) => {
       msg = JSON.parse(raw.toString());
     } catch {
       ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' }));
+      return;
+    }
+
+    if (authConfig.enabled && !isAuthenticated) {
+      if (msg.type === 'auth') {
+        if (isValidKey(authConfig, msg.key)) {
+          isAuthenticated = true;
+          ws.send(JSON.stringify({ type: 'auth_ok' }));
+          return;
+        }
+
+        ws.send(JSON.stringify({ type: 'auth_error', message: 'Invalid API key' }));
+        ws.close(1008, 'Invalid API key');
+        return;
+      }
+
+      ws.send(JSON.stringify({ type: 'auth_required', message: 'API key required' }));
       return;
     }
 

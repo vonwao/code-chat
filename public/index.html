@@ -311,6 +311,74 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
     }
+
+    /* Auth overlay */
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(13, 17, 23, 0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      backdrop-filter: blur(4px);
+    }
+
+    .auth-card {
+      width: min(360px, 90vw);
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .auth-card h2 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .auth-card p {
+      font-size: 13px;
+      color: #8b949e;
+    }
+
+    .auth-input {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      background: #0d1117;
+      color: #c9d1d9;
+      font-size: 14px;
+    }
+
+    .auth-input:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+
+    .auth-btn {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: none;
+      background: #238636;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .auth-btn:hover {
+      background: #2ea043;
+    }
+
+    .auth-error {
+      min-height: 16px;
+      font-size: 12px;
+      color: #f85149;
+    }
   </style>
 </head>
 <body>
@@ -377,8 +445,17 @@
     </div>
   </div>
 
+  <div class="auth-overlay" id="authOverlay" style="display: none;">
+    <div class="auth-card">
+      <h2>API Key Required</h2>
+      <p>Enter your API key to connect.</p>
+      <input class="auth-input" id="authKeyInput" type="password" placeholder="API key" autocomplete="off" />
+      <button class="auth-btn" id="authSubmit">Continue</button>
+      <div class="auth-error" id="authError"></div>
+    </div>
+  </div>
+
   <script>
-    const ws = new WebSocket(`ws://${location.host}`);
     const messagesEl = document.getElementById('messages');
     const inputEl = document.getElementById('input');
     const sendBtn = document.getElementById('sendBtn');
@@ -390,30 +467,138 @@
     const noProject = document.getElementById('noProject');
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
+    const authOverlay = document.getElementById('authOverlay');
+    const authKeyInput = document.getElementById('authKeyInput');
+    const authSubmit = document.getElementById('authSubmit');
+    const authError = document.getElementById('authError');
+
+    const STORAGE_KEY = 'codechat_api_key';
+    let authEnabled = false;
+    let apiKey = null;
+    let ws = null;
 
     let isWorking = false;
     let currentOutput = '';
 
-    // WebSocket handlers
-    ws.onopen = () => {
-      statusDot.className = 'status-dot';
-      statusText.textContent = 'Connected';
-      loadProjects();
-    };
-
-    ws.onclose = () => {
+    function showAuthOverlay(message) {
+      if (!authEnabled) return;
+      authOverlay.style.display = 'flex';
+      authError.textContent = message || '';
       statusDot.className = 'status-dot disconnected';
-      statusText.textContent = 'Disconnected';
-      setEnabled(false);
-    };
+      statusText.textContent = 'Auth required';
+      authKeyInput.value = apiKey || '';
+      authKeyInput.focus();
+    }
 
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      handleMessage(msg);
-    };
+    function hideAuthOverlay() {
+      authOverlay.style.display = 'none';
+      authError.textContent = '';
+    }
+
+    function handleInvalidKey(message) {
+      localStorage.removeItem(STORAGE_KEY);
+      apiKey = null;
+      showAuthOverlay(message || 'Invalid API key');
+    }
+
+    function safeSend(payload) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify(payload));
+    }
+
+    function buildWebSocketUrl() {
+      const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+      const url = new URL(`${protocol}://${location.host}`);
+      if (authEnabled && apiKey) {
+        url.searchParams.set('key', apiKey);
+      }
+      return url.toString();
+    }
+
+    function connectWebSocket() {
+      if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+      }
+
+      statusDot.className = 'status-dot';
+      statusText.textContent = 'Connecting...';
+
+      ws = new WebSocket(buildWebSocketUrl());
+
+      ws.onopen = () => {
+        statusDot.className = 'status-dot';
+        statusText.textContent = 'Connected';
+        hideAuthOverlay();
+        loadProjects();
+      };
+
+      ws.onclose = (event) => {
+        statusDot.className = 'status-dot disconnected';
+        statusText.textContent = 'Disconnected';
+        setEnabled(false);
+        cancelBtn.disabled = true;
+        stopSyncPolling();
+
+        if (authEnabled && event.code === 1008) {
+          handleInvalidKey(event.reason || 'Invalid API key');
+        }
+      };
+
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        handleMessage(msg);
+      };
+    }
+
+    function authFetch(url, options) {
+      if (!authEnabled || !apiKey) {
+        return fetch(url, options);
+      }
+
+      const target = new URL(url, location.origin);
+      target.searchParams.set('key', apiKey);
+      return fetch(target.toString(), options);
+    }
+
+    async function initAuth() {
+      try {
+        const res = await fetch('/api/auth');
+        const data = await res.json();
+        authEnabled = Boolean(data.enabled);
+      } catch {
+        authEnabled = false;
+      }
+
+      if (!authEnabled) {
+        connectWebSocket();
+        return;
+      }
+
+      const storedKey = localStorage.getItem(STORAGE_KEY);
+      if (storedKey) {
+        apiKey = storedKey;
+        connectWebSocket();
+      } else {
+        showAuthOverlay();
+      }
+    }
 
     function handleMessage(msg) {
       switch (msg.type) {
+        case 'auth_ok':
+          hideAuthOverlay();
+          loadProjects();
+          break;
+
+        case 'auth_required':
+          showAuthOverlay(msg.message || 'API key required');
+          setEnabled(false);
+          break;
+
+        case 'auth_error':
+          handleInvalidKey(msg.message || 'Invalid API key');
+          break;
+
         case 'project_selected':
           addSystemMessage(`Switched to ${msg.project.name}`);
           previewFrame.src = msg.project.previewUrl;
@@ -477,8 +662,15 @@
     }
 
     function loadProjects() {
-      fetch('/api/projects')
-        .then(r => r.json())
+      if (authEnabled && !apiKey) return;
+      authFetch('/api/projects')
+        .then(r => {
+          if (r.status === 401) {
+            handleInvalidKey('Invalid API key');
+            throw new Error('Unauthorized');
+          }
+          return r.json();
+        })
         .then(projects => {
           projectSelect.innerHTML = '<option value="">Select a project...</option>';
           projects.forEach(p => {
@@ -487,7 +679,8 @@
             opt.textContent = p.name;
             projectSelect.appendChild(opt);
           });
-        });
+        })
+        .catch(() => {});
     }
 
     function setEnabled(enabled) {
@@ -557,6 +750,18 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function submitAuth() {
+      const key = authKeyInput.value.trim();
+      if (!key) {
+        authError.textContent = 'API key required';
+        return;
+      }
+      authError.textContent = '';
+      apiKey = key;
+      localStorage.setItem(STORAGE_KEY, apiKey);
+      connectWebSocket();
+    }
+
     function send() {
       const text = inputEl.value.trim();
       if (!text || isWorking) return;
@@ -567,7 +772,7 @@
       const currentAI = document.getElementById('currentAI');
       if (currentAI) currentAI.id = '';
 
-      ws.send(JSON.stringify({ type: 'chat', prompt: text }));
+      safeSend({ type: 'chat', prompt: text });
       inputEl.value = '';
       inputEl.style.height = 'auto';
     }
@@ -601,7 +806,12 @@
 
     async function pollSyncStatus(projectId) {
       try {
-        const res = await fetch(`/api/projects/${projectId}/sync-status`);
+        const res = await authFetch(`/api/projects/${projectId}/sync-status`);
+        if (res.status === 401) {
+          handleInvalidKey('Invalid API key');
+          stopSyncPolling();
+          return;
+        }
         const data = await res.json();
         updateSyncStatus(data);
       } catch (err) {
@@ -636,7 +846,7 @@
     projectSelect.onchange = () => {
       const projectId = projectSelect.value;
       if (projectId) {
-        ws.send(JSON.stringify({ type: 'select_project', projectId }));
+        safeSend({ type: 'select_project', projectId });
       } else {
         stopSyncPolling();
       }
@@ -657,12 +867,22 @@
     };
 
     undoBtn.onclick = () => {
-      ws.send(JSON.stringify({ type: 'undo' }));
+      safeSend({ type: 'undo' });
     };
 
     cancelBtn.onclick = () => {
-      ws.send(JSON.stringify({ type: 'cancel' }));
+      safeSend({ type: 'cancel' });
     };
+
+    authSubmit.onclick = submitAuth;
+    authKeyInput.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitAuth();
+      }
+    };
+
+    initAuth();
   </script>
 </body>
 </html>

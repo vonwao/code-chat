@@ -1,5 +1,9 @@
 {
   "port": 3000,
+  "auth": {
+    "enabled": false,
+    "keys": ["your-api-key"]
+  },
   "weldr": {
     "syncUrl": "ws://localhost:9999",
     "syncToken": "your-auth-token"
