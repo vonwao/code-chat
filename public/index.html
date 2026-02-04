@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code Chat</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* Left panel - Chat */
+    .chat-panel {
+      width: 45%;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #30363d;
+    }
+
+    .header {
+      padding: 16px;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .project-select {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .project-select:hover {
+      border-color: #58a6ff;
+    }
+
+    .toolbar {
+      padding: 8px 16px;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn:hover {
+      background: #30363d;
+    }
+
+    .btn.danger {
+      border-color: #f85149;
+      color: #f85149;
+    }
+
+    .btn.danger:hover {
+      background: #f8514922;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .message {
+      margin-bottom: 16px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+      background: #238636;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border-bottom-right-radius: 4px;
+      margin-left: 20%;
+    }
+
+    .message.ai {
+      background: #21262d;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border-bottom-left-radius: 4px;
+      margin-right: 10%;
+    }
+
+    .message.ai pre {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+    }
+
+    .message.system {
+      text-align: center;
+      color: #8b949e;
+      font-size: 13px;
+    }
+
+    .thinking {
+      display: flex;
+      gap: 4px;
+      padding: 12px 16px;
+    }
+
+    .thinking span {
+      width: 8px;
+      height: 8px;
+      background: #58a6ff;
+      border-radius: 50%;
+      animation: bounce 1.4s infinite ease-in-out;
+    }
+
+    .thinking span:nth-child(1) { animation-delay: -0.32s; }
+    .thinking span:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+
+    .input-area {
+      padding: 16px;
+      border-top: 1px solid #30363d;
+    }
+
+    .input-wrapper {
+      display: flex;
+      gap: 8px;
+    }
+
+    .input-wrapper textarea {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      min-height: 44px;
+      max-height: 120px;
+    }
+
+    .input-wrapper textarea:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+
+    .input-wrapper textarea::placeholder {
+      color: #8b949e;
+    }
+
+    .send-btn {
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: none;
+      background: #238636;
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .send-btn:hover {
+      background: #2ea043;
+    }
+
+    .send-btn:disabled {
+      background: #21262d;
+      cursor: not-allowed;
+    }
+
+    /* Right panel - Preview */
+    .preview-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .preview-header {
+      padding: 16px;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .preview-header h2 {
+      font-size: 14px;
+      font-weight: 500;
+      color: #8b949e;
+    }
+
+    .preview-url {
+      font-size: 12px;
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    .preview-url:hover {
+      text-decoration: underline;
+    }
+
+    .preview-frame {
+      flex: 1;
+      border: none;
+      background: white;
+    }
+
+    .no-project {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      color: #8b949e;
+    }
+
+    .no-project svg {
+      width: 48px;
+      height: 48px;
+      opacity: 0.5;
+    }
+
+    /* Status indicator */
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #8b949e;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3fb950;
+    }
+
+    .status-dot.disconnected {
+      background: #f85149;
+    }
+
+    .status-dot.working {
+      background: #d29922;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Chat Panel -->
+    <div class="chat-panel">
+      <div class="header">
+        <h1>💬 Code Chat</h1>
+        <select class="project-select" id="projectSelect">
+          <option value="">Select a project...</option>
+        </select>
+        <div class="status">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Connecting...</span>
+        </div>
+      </div>
+      
+      <div class="toolbar">
+        <button class="btn" id="undoBtn" disabled>
+          ↩️ Undo Last Change
+        </button>
+        <button class="btn danger" id="cancelBtn" disabled>
+          ⏹️ Cancel
+        </button>
+      </div>
+      
+      <div class="messages" id="messages">
+        <div class="message system">Select a project to start chatting with AI</div>
+      </div>
+      
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea 
+            id="input" 
+            placeholder="Ask AI to change something..." 
+            rows="1"
+            disabled
+          ></textarea>
+          <button class="send-btn" id="sendBtn" disabled>Send</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Preview Panel -->
+    <div class="preview-panel">
+      <div class="preview-header">
+        <h2>Preview</h2>
+        <a class="preview-url" id="previewUrl" href="#" target="_blank">Open in new tab ↗</a>
+      </div>
+      <div class="no-project" id="noProject">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M3 9h18" />
+          <circle cx="7" cy="6" r="1" fill="currentColor" />
+          <circle cx="10" cy="6" r="1" fill="currentColor" />
+        </svg>
+        <span>Select a project to see preview</span>
+      </div>
+      <iframe class="preview-frame" id="previewFrame" style="display: none;"></iframe>
+    </div>
+  </div>
+
+  <script>
+    const ws = new WebSocket(`ws://${location.host}`);
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('input');
+    const sendBtn = document.getElementById('sendBtn');
+    const undoBtn = document.getElementById('undoBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const projectSelect = document.getElementById('projectSelect');
+    const previewFrame = document.getElementById('previewFrame');
+    const previewUrl = document.getElementById('previewUrl');
+    const noProject = document.getElementById('noProject');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+
+    let isWorking = false;
+    let currentOutput = '';
+
+    // WebSocket handlers
+    ws.onopen = () => {
+      statusDot.className = 'status-dot';
+      statusText.textContent = 'Connected';
+      loadProjects();
+    };
+
+    ws.onclose = () => {
+      statusDot.className = 'status-dot disconnected';
+      statusText.textContent = 'Disconnected';
+      setEnabled(false);
+    };
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      handleMessage(msg);
+    };
+
+    function handleMessage(msg) {
+      switch (msg.type) {
+        case 'project_selected':
+          addSystemMessage(`Switched to ${msg.project.name}`);
+          previewFrame.src = msg.project.previewUrl;
+          previewFrame.style.display = 'block';
+          noProject.style.display = 'none';
+          previewUrl.href = msg.project.previewUrl;
+          previewUrl.textContent = msg.project.previewUrl + ' ↗';
+          setEnabled(true);
+          break;
+
+        case 'thinking':
+          isWorking = true;
+          updateWorkingState();
+          addThinking();
+          break;
+
+        case 'output':
+          currentOutput += msg.data;
+          updateAIMessage(currentOutput);
+          break;
+
+        case 'done':
+          isWorking = false;
+          currentOutput = '';
+          updateWorkingState();
+          removeThinking();
+          // Refresh preview
+          previewFrame.src = previewFrame.src;
+          break;
+
+        case 'cancelled':
+          isWorking = false;
+          currentOutput = '';
+          updateWorkingState();
+          removeThinking();
+          addSystemMessage('Cancelled');
+          break;
+
+        case 'undoing':
+          addSystemMessage('Undoing changes...');
+          break;
+
+        case 'undo_done':
+          addSystemMessage(msg.message);
+          previewFrame.src = previewFrame.src;
+          break;
+
+        case 'error':
+          addSystemMessage(`Error: ${msg.message}`);
+          break;
+      }
+    }
+
+    function loadProjects() {
+      fetch('/api/projects')
+        .then(r => r.json())
+        .then(projects => {
+          projectSelect.innerHTML = '<option value="">Select a project...</option>';
+          projects.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name;
+            projectSelect.appendChild(opt);
+          });
+        });
+    }
+
+    function setEnabled(enabled) {
+      inputEl.disabled = !enabled;
+      sendBtn.disabled = !enabled;
+      undoBtn.disabled = !enabled;
+    }
+
+    function updateWorkingState() {
+      cancelBtn.disabled = !isWorking;
+      sendBtn.disabled = isWorking;
+      inputEl.disabled = isWorking;
+      statusDot.className = isWorking ? 'status-dot working' : 'status-dot';
+      statusText.textContent = isWorking ? 'AI is working...' : 'Connected';
+    }
+
+    function addUserMessage(text) {
+      const div = document.createElement('div');
+      div.className = 'message user';
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      scrollToBottom();
+    }
+
+    function addThinking() {
+      removeThinking();
+      const div = document.createElement('div');
+      div.className = 'message ai thinking';
+      div.id = 'thinking';
+      div.innerHTML = '<span></span><span></span><span></span>';
+      messagesEl.appendChild(div);
+      scrollToBottom();
+    }
+
+    function removeThinking() {
+      const el = document.getElementById('thinking');
+      if (el) el.remove();
+    }
+
+    function updateAIMessage(text) {
+      removeThinking();
+      let aiMsg = document.getElementById('currentAI');
+      if (!aiMsg) {
+        aiMsg = document.createElement('div');
+        aiMsg.className = 'message ai';
+        aiMsg.id = 'currentAI';
+        aiMsg.innerHTML = '<pre></pre>';
+        messagesEl.appendChild(aiMsg);
+      }
+      aiMsg.querySelector('pre').textContent = text;
+      scrollToBottom();
+    }
+
+    function addSystemMessage(text) {
+      // Finalize any current AI message
+      const currentAI = document.getElementById('currentAI');
+      if (currentAI) currentAI.id = '';
+      
+      const div = document.createElement('div');
+      div.className = 'message system';
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function send() {
+      const text = inputEl.value.trim();
+      if (!text || isWorking) return;
+
+      addUserMessage(text);
+      
+      // Finalize any previous AI message
+      const currentAI = document.getElementById('currentAI');
+      if (currentAI) currentAI.id = '';
+
+      ws.send(JSON.stringify({ type: 'chat', prompt: text }));
+      inputEl.value = '';
+      inputEl.style.height = 'auto';
+    }
+
+    // Event listeners
+    projectSelect.onchange = () => {
+      const projectId = projectSelect.value;
+      if (projectId) {
+        ws.send(JSON.stringify({ type: 'select_project', projectId }));
+      }
+    };
+
+    sendBtn.onclick = send;
+
+    inputEl.onkeydown = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    };
+
+    inputEl.oninput = () => {
+      inputEl.style.height = 'auto';
+      inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+    };
+
+    undoBtn.onclick = () => {
+      ws.send(JSON.stringify({ type: 'undo' }));
+    };
+
+    cancelBtn.onclick = () => {
+      ws.send(JSON.stringify({ type: 'cancel' }));
+    };
+  </script>
+</body>
+</html>

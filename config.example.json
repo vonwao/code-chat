@@ -1,0 +1,17 @@
+{
+  "port": 3000,
+  "projects": [
+    {
+      "id": "my-app",
+      "name": "My App",
+      "path": "/Users/yourname/projects/my-app",
+      "previewUrl": "http://localhost:5173"
+    },
+    {
+      "id": "marketing-site",
+      "name": "Marketing Site",
+      "path": "/Users/yourname/projects/marketing-site",
+      "previewUrl": "http://localhost:3001"
+    }
+  ]
+}
