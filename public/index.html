@@ -280,6 +280,17 @@
       color: #8b949e;
     }
 
+    .sync-status {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #8b949e;
+      padding: 4px 8px;
+      background: #21262d;
+      border-radius: 4px;
+    }
+
     .status-dot {
       width: 8px;
       height: 8px;
@@ -324,6 +335,10 @@
         <button class="btn danger" id="cancelBtn" disabled>
           ⏹️ Cancel
         </button>
+        <div class="sync-status" id="syncStatus" style="margin-left: auto; display: none;">
+          <span id="syncIcon">🔄</span>
+          <span id="syncLabel">Syncing...</span>
+        </div>
       </div>
       
       <div class="messages" id="messages">
@@ -407,6 +422,7 @@
           previewUrl.href = msg.project.previewUrl;
           previewUrl.textContent = msg.project.previewUrl + ' ↗';
           setEnabled(true);
+          startSyncPolling(msg.project.id);
           break;
 
         case 'thinking':
@@ -548,11 +564,73 @@
       inputEl.style.height = 'auto';
     }
 
+    // Sync status polling
+    let syncPollInterval = null;
+    const syncStatus = document.getElementById('syncStatus');
+    const syncIcon = document.getElementById('syncIcon');
+    const syncLabel = document.getElementById('syncLabel');
+
+    function startSyncPolling(projectId) {
+      // Stop any existing polling
+      if (syncPollInterval) {
+        clearInterval(syncPollInterval);
+      }
+
+      syncStatus.style.display = 'flex';
+      pollSyncStatus(projectId);
+      
+      // Poll every 5 seconds
+      syncPollInterval = setInterval(() => pollSyncStatus(projectId), 5000);
+    }
+
+    function stopSyncPolling() {
+      if (syncPollInterval) {
+        clearInterval(syncPollInterval);
+        syncPollInterval = null;
+      }
+      syncStatus.style.display = 'none';
+    }
+
+    async function pollSyncStatus(projectId) {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/sync-status`);
+        const data = await res.json();
+        updateSyncStatus(data);
+      } catch (err) {
+        updateSyncStatus({ syncStatus: 'error', error: err.message });
+      }
+    }
+
+    function updateSyncStatus(data) {
+      if (data.syncStatus === 'connected') {
+        syncIcon.textContent = '🟢';
+        syncLabel.textContent = 'Synced';
+      } else if (data.syncStatus === 'syncing') {
+        syncIcon.textContent = '🔄';
+        syncLabel.textContent = 'Syncing...';
+      } else if (data.syncStatus === 'disconnected') {
+        syncIcon.textContent = '🔴';
+        syncLabel.textContent = 'Not synced';
+      } else {
+        syncIcon.textContent = '⚠️';
+        syncLabel.textContent = data.error ? 'Error' : 'Unknown';
+      }
+
+      // Add last sync time as tooltip
+      if (data.lastSync && data.lastSync !== 'never') {
+        syncStatus.title = `Last sync: ${data.lastSync}`;
+      } else {
+        syncStatus.title = 'Not synced yet';
+      }
+    }
+
     // Event listeners
     projectSelect.onchange = () => {
       const projectId = projectSelect.value;
       if (projectId) {
         ws.send(JSON.stringify({ type: 'select_project', projectId }));
+      } else {
+        stopSyncPolling();
       }
     };
 

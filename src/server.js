@@ -32,6 +32,44 @@ app.get('/api/projects', (req, res) => {
   })));
 });
 
+// API: Get weldr sync status for a project
+app.get('/api/projects/:id/sync-status', async (req, res) => {
+  const project = config.projects.find(p => p.id === req.params.id);
+  if (!project) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+
+  try {
+    // Run weldr status and parse output
+    const { execSync } = await import('child_process');
+    const output = execSync('weldr status', { 
+      cwd: project.path,
+      encoding: 'utf-8',
+      timeout: 5000
+    });
+
+    // Parse the output
+    const syncMatch = output.match(/Sync status\s+(\w+)/);
+    const jjMatch = output.match(/JJ status\s+(\w+)/);
+    const lastSyncMatch = output.match(/Last sync\s+(.+)/);
+
+    res.json({
+      syncStatus: syncMatch ? syncMatch[1] : 'unknown',
+      jjStatus: jjMatch ? jjMatch[1] : 'unknown',
+      lastSync: lastSyncMatch ? lastSyncMatch[1].trim() : 'never',
+      daemonRunning: weldrManager.getDaemonStatus(project.id).running
+    });
+  } catch (err) {
+    res.json({
+      syncStatus: 'error',
+      jjStatus: 'unknown',
+      lastSync: 'never',
+      daemonRunning: weldrManager.getDaemonStatus(project.id).running,
+      error: err.message
+    });
+  }
+});
+
 // Track active PTY sessions
 const sessions = new Map();
 
