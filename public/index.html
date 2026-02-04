@@ -445,6 +445,14 @@
           previewFrame.src = previewFrame.src;
           break;
 
+        case 'modified_files':
+          if (Array.isArray(msg.files) && msg.files.length > 0) {
+            addSystemMessage(`Modified: ${msg.files.join(', ')}`);
+          } else {
+            addSystemMessage('No files modified');
+          }
+          break;
+
         case 'cancelled':
           isWorking = false;
           currentOutput = '';

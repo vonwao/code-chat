@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync, existsSync } from 'fs';
+import { execFile } from 'child_process';
 import { WeldrManager } from './weldr.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -186,6 +187,7 @@ function handleChat(ws, projectId, prompt, setPty) {
       type: 'done',
       exitCode,
     }));
+    sendModifiedFiles(ws, project.path);
   });
 }
 
@@ -227,6 +229,69 @@ function handleUndo(ws, projectId) {
       });
     }
   });
+}
+
+function execCommand(command, args, options) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (err, stdout) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+async function getModifiedFiles(projectPath) {
+  const files = new Set();
+
+  try {
+    const output = await execCommand('git', ['diff', '--name-only'], { cwd: projectPath });
+    for (const line of output.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed) files.add(trimmed);
+    }
+  } catch {
+    // Ignore and fall back to other sources
+  }
+
+  try {
+    const output = await execCommand('git', ['status', '--porcelain'], { cwd: projectPath });
+    for (const line of output.split('\n')) {
+      const entry = line.slice(3).trim();
+      if (!entry) continue;
+      const renamed = entry.includes('->') ? entry.split('->').pop().trim() : entry;
+      if (renamed) files.add(renamed);
+    }
+  } catch {
+    // Ignore and fall back to other sources
+  }
+
+  if (files.size === 0) {
+    try {
+      const output = await execCommand('jj', ['diff', '--name-only'], { cwd: projectPath });
+      for (const line of output.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed) files.add(trimmed);
+      }
+    } catch {
+      // No VCS detected
+    }
+  }
+
+  return Array.from(files).sort();
+}
+
+async function sendModifiedFiles(ws, projectPath) {
+  const files = await getModifiedFiles(projectPath);
+  try {
+    if (ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'modified_files', files }));
+    }
+  } catch {
+    // Ignore send errors on closed sockets
+  }
 }
 
 // Initialize weldr manager
