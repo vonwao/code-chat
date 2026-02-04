@@ -1,0 +1,11 @@
+{
+  "done": ["T1"],
+  "inProgress": null,
+  "log": [
+    {
+      "taskId": "T1",
+      "timestamp": "2026-02-04T19:30:00Z",
+      "commit": "8d24841"
+    }
+  ]
+}

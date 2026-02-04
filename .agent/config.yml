@@ -1,0 +1,3 @@
+# Agent configuration for code-chat
+agent: claude        # Default agent (needs reasoning for integration work)
+yolo: true           # Skip confirmation prompts
