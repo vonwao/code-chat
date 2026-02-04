@@ -1,16 +1,9 @@
 {
-  "done": ["T1", "T2"],
+  "done": ["T1", "T2", "T3"],
   "inProgress": null,
   "log": [
-    {
-      "taskId": "T1",
-      "timestamp": "2026-02-04T19:30:00Z",
-      "commit": "8d24841"
-    },
-    {
-      "taskId": "T2",
-      "timestamp": "2026-02-04T22:40:00Z",
-      "commit": "0ddfdd5"
-    }
+    {"taskId": "T1", "timestamp": "2026-02-04T19:30:00Z", "commit": "8d24841"},
+    {"taskId": "T2", "timestamp": "2026-02-04T22:40:00Z", "commit": "0ddfdd5"},
+    {"taskId": "T3", "timestamp": "2026-02-04T22:50:00Z", "commit": "6868fea"}
   ]
 }

@@ -27,7 +27,7 @@ Should handle:
 - weldr not installed (warn but continue)
 - Project not initialized (run `weldr init` first, or auto-init)
 
-### T3: Sync status indicator in UI @codex
+### T3: Sync status indicator in UI @codex ✅ (done: 2026-02-04, 6868fea)
 **Depends:** T2
 **Artifacts:** public/index.html (modified), src/server.js (modified)
 **Commit:** `feat: sync status indicator`
