@@ -7,6 +7,7 @@ import { dirname, join } from 'path';
 import { readFileSync, existsSync } from 'fs';
 import { execFile } from 'child_process';
 import { WeldrManager } from './weldr.js';
+import { DevServerManager } from './devserver.js';
 import {
   normalizeAuthConfig,
   isValidKey,
@@ -97,6 +98,32 @@ app.get('/api/projects/:id/sync-status', requireAuth, async (req, res) => {
       daemonRunning: weldrManager.getDaemonStatus(project.id).running,
       error: err.message
     });
+  }
+});
+
+// API: Get dev server status for a project
+app.get('/api/projects/:id/devserver-status', requireAuth, (req, res) => {
+  const project = config.projects.find(p => p.id === req.params.id);
+  if (!project) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+
+  const status = devServerManager.getStatus(project.id);
+  res.json(status);
+});
+
+// API: Restart dev server for a project
+app.post('/api/projects/:id/devserver-restart', requireAuth, async (req, res) => {
+  const project = config.projects.find(p => p.id === req.params.id);
+  if (!project) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+
+  try {
+    await devServerManager.restartServer(project);
+    res.json({ success: true, message: 'Dev server restarting' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -355,8 +382,9 @@ async function sendModifiedFiles(ws, projectPath) {
   }
 }
 
-// Initialize weldr manager
+// Initialize managers
 const weldrManager = new WeldrManager(config, console);
+const devServerManager = new DevServerManager(config, console);
 
 const port = config.port || 3000;
 server.listen(port, '0.0.0.0', async () => {
@@ -364,13 +392,15 @@ server.listen(port, '0.0.0.0', async () => {
   console.log(`   Projects: ${config.projects.map(p => p.name).join(', ') || 'none configured'}`);
   console.log(`\n   Configure projects in config.json`);
   
-  // Start weldr daemons for all projects
+  // Start weldr daemons and dev servers for all projects
   await weldrManager.startAll();
+  await devServerManager.startAll();
 });
 
 // Graceful shutdown
 const shutdown = async (signal) => {
   console.log(`\n${signal} received, shutting down...`);
+  devServerManager.stopAll();
   weldrManager.stopAll();
   
   // Close all WebSocket connections
