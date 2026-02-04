@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync, existsSync } from 'fs';
+import { WeldrManager } from './weldr.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -190,9 +191,40 @@ function handleUndo(ws, projectId) {
   });
 }
 
+// Initialize weldr manager
+const weldrManager = new WeldrManager(config, console);
+
 const port = config.port || 3000;
-server.listen(port, '0.0.0.0', () => {
+server.listen(port, '0.0.0.0', async () => {
   console.log(`🚀 Code Chat running at http://localhost:${port}`);
   console.log(`   Projects: ${config.projects.map(p => p.name).join(', ') || 'none configured'}`);
   console.log(`\n   Configure projects in config.json`);
+  
+  // Start weldr daemons for all projects
+  await weldrManager.startAll();
 });
+
+// Graceful shutdown
+const shutdown = async (signal) => {
+  console.log(`\n${signal} received, shutting down...`);
+  weldrManager.stopAll();
+  
+  // Close all WebSocket connections
+  for (const client of wss.clients) {
+    client.close(1001, 'Server shutting down');
+  }
+  
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+  
+  // Force exit after 5 seconds
+  setTimeout(() => {
+    console.log('Forcing exit...');
+    process.exit(1);
+  }, 5000);
+};
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
