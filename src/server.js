@@ -8,6 +8,7 @@ import { readFileSync, existsSync } from 'fs';
 import { execFile } from 'child_process';
 import { WeldrManager } from './weldr.js';
 import { DevServerManager } from './devserver.js';
+import { HealthManager } from './health.js';
 import {
   normalizeAuthConfig,
   isValidKey,
@@ -385,6 +386,13 @@ async function sendModifiedFiles(ws, projectPath) {
 // Initialize managers
 const weldrManager = new WeldrManager(config, console);
 const devServerManager = new DevServerManager(config, console);
+const healthManager = new HealthManager({
+  config,
+  weldrManager,
+  devServerManager,
+  wss,
+  logger: console
+});
 
 const port = config.port || 3000;
 server.listen(port, '0.0.0.0', async () => {
@@ -395,6 +403,7 @@ server.listen(port, '0.0.0.0', async () => {
   // Start weldr daemons and dev servers for all projects
   await weldrManager.startAll();
   await devServerManager.startAll();
+  healthManager.start();
 });
 
 // Graceful shutdown
@@ -402,6 +411,7 @@ const shutdown = async (signal) => {
   console.log(`\n${signal} received, shutting down...`);
   devServerManager.stopAll();
   weldrManager.stopAll();
+  healthManager.stop();
   
   // Close all WebSocket connections
   for (const client of wss.clients) {
