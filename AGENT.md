@@ -47,3 +47,20 @@ Manual testing for now. Run server, open browser, try editing.
 ## Related Projects
 - weldr-v3 (`~/dev/weldr-v3`) — Sync server and daemon
 - neudelta-ceo (`~/dev/code-chat-projects/neudelta-ceo`) — Test project
+
+## Weldr Integration
+weldr is globally linked and available as `weldr` command.
+
+Key commands:
+- `weldr init` — Initialize project with jj
+- `weldr daemon --sync-url <url> --sync-token <token>` — Start file watcher + sync
+- `weldr status` — Show jj/sync status
+- `weldr server --port <port> --auth-keys <keys>` — Run sync server
+
+Sync URL format: `ws://host:port` with separate `--sync-token` flag.
+
+For code-chat integration:
+1. Start weldr daemon for each project when server starts
+2. Pass sync URL/token from project config
+3. Track daemon processes for restart on crash
+4. Show sync status in UI
