@@ -12,6 +12,9 @@ import { HealthManager } from './health.js';
 import {
   normalizeAuthConfig,
   isValidKey,
+  validateKey,
+  canAccessProject,
+  filterProjectsForUser,
   getKeyFromHttpRequest,
   getKeyFromWebSocketRequest,
 } from './auth.js';
@@ -26,7 +29,7 @@ if (existsSync(configPath)) {
 }
 const authConfig = normalizeAuthConfig(config);
 
-if (authConfig.enabled && authConfig.keys.length === 0) {
+if (authConfig.enabled && Object.keys(authConfig.keys).length === 0) {
   console.warn('[auth] Enabled, but no keys configured. All requests will be rejected.');
 }
 
@@ -44,20 +47,25 @@ app.get('/api/auth', (req, res) => {
 
 function requireAuth(req, res, next) {
   if (!authConfig.enabled) {
+    req.user = { name: 'Anonymous', projects: '*' };
     return next();
   }
 
   const key = getKeyFromHttpRequest(req);
-  if (isValidKey(authConfig, key)) {
+  const result = validateKey(authConfig, key);
+  
+  if (result.valid) {
+    req.user = result.user;
     return next();
   }
 
   res.status(401).json({ error: 'Unauthorized' });
 }
 
-// API: List projects
+// API: List projects (filtered by user access)
 app.get('/api/projects', requireAuth, (req, res) => {
-  res.json(config.projects.map(p => ({
+  const accessibleProjects = filterProjectsForUser(config.projects, req.user);
+  res.json(accessibleProjects.map(p => ({
     id: p.id,
     name: p.name,
     previewUrl: p.previewUrl,
@@ -135,12 +143,15 @@ wss.on('connection', (ws, req) => {
   let currentPty = null;
   let currentProjectId = null;
   let isAuthenticated = !authConfig.enabled;
+  let currentUser = authConfig.enabled ? null : { name: 'Anonymous', projects: '*' };
 
   if (authConfig.enabled) {
     const key = getKeyFromWebSocketRequest(req);
     if (key) {
-      if (isValidKey(authConfig, key)) {
+      const result = validateKey(authConfig, key);
+      if (result.valid) {
         isAuthenticated = true;
+        currentUser = result.user;
       } else {
         ws.close(1008, 'Invalid API key');
         return;
@@ -161,9 +172,14 @@ wss.on('connection', (ws, req) => {
 
     if (authConfig.enabled && !isAuthenticated) {
       if (msg.type === 'auth') {
-        if (isValidKey(authConfig, msg.key)) {
+        const result = validateKey(authConfig, msg.key);
+        if (result.valid) {
           isAuthenticated = true;
-          ws.send(JSON.stringify({ type: 'auth_ok' }));
+          currentUser = result.user;
+          ws.send(JSON.stringify({ 
+            type: 'auth_ok', 
+            user: { name: currentUser.name }
+          }));
           return;
         }
 
@@ -178,8 +194,9 @@ wss.on('connection', (ws, req) => {
 
     switch (msg.type) {
       case 'select_project':
-        handleSelectProject(ws, msg.projectId);
-        currentProjectId = msg.projectId;
+        if (handleSelectProject(ws, msg.projectId, currentUser)) {
+          currentProjectId = msg.projectId;
+        }
         break;
 
       case 'chat':
@@ -217,11 +234,17 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-function handleSelectProject(ws, projectId) {
+function handleSelectProject(ws, projectId, user) {
   const project = config.projects.find(p => p.id === projectId);
   if (!project) {
     ws.send(JSON.stringify({ type: 'error', message: `Unknown project: ${projectId}` }));
-    return;
+    return false;
+  }
+  
+  // Check if user has access to this project
+  if (!canAccessProject(user, projectId)) {
+    ws.send(JSON.stringify({ type: 'error', message: `Access denied to project: ${projectId}` }));
+    return false;
   }
   
   ws.send(JSON.stringify({
@@ -232,6 +255,7 @@ function handleSelectProject(ws, projectId) {
       previewUrl: project.previewUrl,
     }
   }));
+  return true;
 }
 
 function handleChat(ws, projectId, prompt, setPty) {

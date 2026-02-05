@@ -1,8 +1,21 @@
 {
   "port": 3000,
   "auth": {
-    "enabled": false,
-    "keys": ["your-api-key"]
+    "enabled": true,
+    "keys": {
+      "tester-abc123": {
+        "name": "Friend",
+        "projects": ["demo"]
+      },
+      "ceo-xyz789": {
+        "name": "CEO",
+        "projects": ["neudelta"]
+      },
+      "admin-secret": {
+        "name": "Admin",
+        "projects": "*"
+      }
+    }
   },
   "weldr": {
     "syncUrl": "ws://localhost:9999",
@@ -10,10 +23,17 @@
   },
   "projects": [
     {
-      "id": "my-app",
-      "name": "My App",
-      "path": "/Users/yourname/projects/my-app",
+      "id": "demo",
+      "name": "Demo Project",
+      "path": "/Users/yourname/projects/demo",
       "previewUrl": "http://localhost:5173",
+      "devCommand": "npm run dev"
+    },
+    {
+      "id": "neudelta",
+      "name": "NeuDelta",
+      "path": "/Users/yourname/projects/neudelta",
+      "previewUrl": "http://localhost:5000",
       "devCommand": "npm run dev"
     }
   ]
