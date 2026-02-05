@@ -9,6 +9,7 @@ import { execFile, execSync } from 'child_process';
 import { WeldrManager } from './weldr.js';
 import { DevServerManager } from './devserver.js';
 import { HealthManager } from './health.js';
+import { ClaudeMonitor } from './claude-monitor.js';
 import {
   normalizeAuthConfig,
   isValidKey,
@@ -18,6 +19,14 @@ import {
   getKeyFromHttpRequest,
   getKeyFromWebSocketRequest,
 } from './auth.js';
+
+// Initialize Claude monitor with configurable settings
+const claudeMonitor = new ClaudeMonitor({
+  timeoutMs: 30 * 60 * 1000,      // 30 minute default timeout
+  loopThreshold: 5,               // Same pattern 5x = loop warning
+  stallMs: 5 * 60 * 1000,         // 5 min no output = stall
+  progressIntervalMs: 30 * 1000,  // Progress update every 30s
+});
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -142,6 +151,7 @@ const sessions = new Map();
 wss.on('connection', (ws, req) => {
   let currentPty = null;
   let currentProjectId = null;
+  let currentSessionId = null;
   let isAuthenticated = !authConfig.enabled;
   let currentUser = authConfig.enabled ? null : { name: 'Anonymous', projects: '*' };
 
@@ -204,16 +214,64 @@ wss.on('connection', (ws, req) => {
           ws.send(JSON.stringify({ type: 'error', message: 'No project selected' }));
           return;
         }
-        handleChat(ws, currentProjectId, msg.prompt, (pty) => {
-          currentPty = pty;
-        });
+        handleChat(
+          ws, 
+          currentProjectId, 
+          msg.prompt, 
+          (pty) => { currentPty = pty; },
+          (sessionId) => { currentSessionId = sessionId; }
+        );
         break;
 
       case 'cancel':
         if (currentPty) {
+          if (currentSessionId) {
+            claudeMonitor.endSession(currentSessionId);
+          }
           currentPty.kill();
           currentPty = null;
+          currentSessionId = null;
           ws.send(JSON.stringify({ type: 'cancelled' }));
+        }
+        break;
+
+      case 'extend_timeout':
+        // Extend the session timeout by 15 minutes
+        if (currentSessionId) {
+          const extended = claudeMonitor.extendTimeout(currentSessionId, 15 * 60 * 1000);
+          ws.send(JSON.stringify({ 
+            type: 'timeout_extended', 
+            success: extended,
+            message: extended ? 'Timeout extended by 15 minutes' : 'No active session',
+          }));
+        }
+        break;
+
+      case 'force_stop':
+        // Force stop Claude without completing
+        if (currentPty) {
+          console.log(`[chat] Force stopping session ${currentSessionId}`);
+          if (currentSessionId) {
+            claudeMonitor.endSession(currentSessionId);
+          }
+          currentPty.kill('SIGKILL');
+          currentPty = null;
+          currentSessionId = null;
+          ws.send(JSON.stringify({ 
+            type: 'force_stopped', 
+            message: 'Claude was force stopped. Changes may be incomplete.',
+          }));
+          sendModifiedFiles(ws, config.projects.find(p => p.id === currentProjectId)?.path);
+        }
+        break;
+
+      case 'get_session_stats':
+        // Get current session stats
+        if (currentSessionId) {
+          const stats = claudeMonitor.getSessionStats(currentSessionId);
+          ws.send(JSON.stringify({ type: 'session_stats', stats }));
+        } else {
+          ws.send(JSON.stringify({ type: 'session_stats', stats: null }));
         }
         break;
 
@@ -228,6 +286,9 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
+    if (currentSessionId) {
+      claudeMonitor.endSession(currentSessionId);
+    }
     if (currentPty) {
       currentPty.kill();
     }
@@ -258,7 +319,7 @@ function handleSelectProject(ws, projectId, user) {
   return true;
 }
 
-function handleChat(ws, projectId, prompt, setPty) {
+function handleChat(ws, projectId, prompt, setPty, setSessionId) {
   const project = config.projects.find(p => p.id === projectId);
   if (!project) {
     ws.send(JSON.stringify({ type: 'error', message: `Unknown project: ${projectId}` }));
@@ -306,10 +367,52 @@ function handleChat(ws, projectId, prompt, setPty) {
 
   setPty(pty);
 
+  // Generate session ID and start monitoring
+  const sessionId = `${projectId}-${Date.now()}`;
+  if (setSessionId) setSessionId(sessionId);
+
+  claudeMonitor.startSession(sessionId, {
+    onTimeout: ({ elapsed, reason }) => {
+      console.warn(`[chat] Session ${sessionId} timed out after ${Math.round(elapsed / 60000)} minutes`);
+      ws.send(JSON.stringify({
+        type: 'timeout_warning',
+        elapsed,
+        reason,
+        message: `Claude has been running for ${Math.round(elapsed / 60000)} minutes. It may be stuck.`,
+        actions: ['extend', 'force_stop', 'force_complete'],
+      }));
+    },
+
+    onLoopDetected: ({ pattern, count, elapsed }) => {
+      console.warn(`[chat] Loop detected in session ${sessionId}: "${pattern}" (${count}x)`);
+      ws.send(JSON.stringify({
+        type: 'loop_warning',
+        pattern,
+        count,
+        elapsed,
+        message: `Claude may be stuck in a loop. Pattern "${pattern}" repeated ${count} times.`,
+        actions: ['force_stop', 'force_complete', 'continue'],
+      }));
+    },
+
+    onProgress: ({ elapsed, sinceActivity, loopSuspicion }) => {
+      ws.send(JSON.stringify({
+        type: 'progress',
+        elapsed,
+        sinceActivity,
+        loopSuspicion,
+      }));
+    },
+  });
+
   let outputBuffer = '';
 
   pty.onData((data) => {
     outputBuffer += data;
+    
+    // Record output for loop detection
+    claudeMonitor.recordOutput(sessionId, data);
+    
     ws.send(JSON.stringify({
       type: 'output',
       data: data,
@@ -317,12 +420,18 @@ function handleChat(ws, projectId, prompt, setPty) {
   });
 
   pty.onExit(({ exitCode }) => {
+    // End monitoring
+    claudeMonitor.endSession(sessionId);
+    
     ws.send(JSON.stringify({
       type: 'done',
       exitCode,
     }));
     sendModifiedFiles(ws, project.path);
   });
+
+  // Return session ID for external control
+  return sessionId;
 }
 
 // Find an executable in PATH or common locations
