@@ -38,7 +38,7 @@ Show weldr sync status in the UI:
 3. UI shows indicator: 🟢 Synced | 🟡 Syncing | 🔴 Disconnected
 4. Poll every 5 seconds or use WebSocket
 
-### T4: Show changed files after AI edit @codex
+### T4: Show changed files after AI edit @codex ✅ (done: 2026-02-04, 3d739f2)
 **Depends:** T1
 **Artifacts:** public/index.html (modified), src/server.js (modified)
 **Commit:** `feat: display changed files`
@@ -53,7 +53,7 @@ After Claude Code finishes:
 
 ## 🏁 Milestone 3: Production Ready
 
-### T5: API key authentication @codex
+### T5: API key authentication @codex ✅ (done: 2026-02-04, 281a596)
 **Depends:** T1
 **Artifacts:** src/auth.js, src/server.js (modified), public/index.html (modified)
 **Commit:** `feat: API key authentication`
@@ -65,7 +65,7 @@ Add simple auth:
 4. Send key in WebSocket connection URL or first message
 5. Server validates and rejects invalid keys
 
-### T6: Auto-start dev server @claude
+### T6: Auto-start dev server @claude ✅ (done: 2026-02-04, 8c054b0)
 **Depends:** T1
 **Artifacts:** src/devserver.js, src/server.js (modified)
 **Commit:** `feat: auto-start project dev servers`
@@ -81,7 +81,7 @@ Handle:
 - Already running (port in use) — detect and skip
 - Startup failure — show error in UI
 
-### T7: Health check and restart @codex
+### T7: Health check and restart @codex ✅ (done: 2026-02-04, d99ed6d)
 **Depends:** T2, T6
 **Artifacts:** src/health.js, src/server.js (modified)
 **Commit:** `feat: health checks and auto-restart`
@@ -93,7 +93,7 @@ Periodic health checks:
 4. Auto-restart failed services
 5. Log issues
 
-### T8: Deployment documentation @claude
+### T8: Deployment documentation @claude ✅ (done: 2026-02-04, 9d470e0)
 **Depends:** T5, T6
 **Artifacts:** docs/DEPLOYMENT.md, README.md (modified)
 **Commit:** `docs: deployment guide`
