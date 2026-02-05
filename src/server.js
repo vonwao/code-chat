@@ -5,7 +5,7 @@ import { createServer } from 'http';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync, existsSync } from 'fs';
-import { execFile } from 'child_process';
+import { execFile, execSync } from 'child_process';
 import { WeldrManager } from './weldr.js';
 import { DevServerManager } from './devserver.js';
 import { HealthManager } from './health.js';
@@ -267,21 +267,42 @@ function handleChat(ws, projectId, prompt, setPty) {
 
   ws.send(JSON.stringify({ type: 'thinking' }));
 
-  // Spawn Claude Code with the prompt
-  // Using -p for print mode (non-interactive) and --dangerously-skip-permissions
-  const pty = spawn('claude', [
-    '-p', prompt,
-    '--dangerously-skip-permissions'
-  ], {
-    name: 'xterm-color',
-    cols: 120,
-    rows: 30,
-    cwd: project.path,
-    env: {
-      ...process.env,
-      FORCE_COLOR: '1',
-    },
-  });
+  // Find claude in common locations
+  const claudePath = findExecutable('claude');
+  if (!claudePath) {
+    console.error('[chat] Claude CLI not found in PATH');
+    ws.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'Claude CLI not found. Make sure `claude` is installed and in your PATH.' 
+    }));
+    return;
+  }
+
+  let pty;
+  try {
+    // Spawn Claude Code with the prompt
+    // Using -p for print mode (non-interactive) and --dangerously-skip-permissions
+    pty = spawn(claudePath, [
+      '-p', prompt,
+      '--dangerously-skip-permissions'
+    ], {
+      name: 'xterm-color',
+      cols: 120,
+      rows: 30,
+      cwd: project.path,
+      env: {
+        ...process.env,
+        FORCE_COLOR: '1',
+      },
+    });
+  } catch (err) {
+    console.error('[chat] Failed to spawn Claude:', err.message);
+    ws.send(JSON.stringify({ 
+      type: 'error', 
+      message: `Failed to start Claude: ${err.message}` 
+    }));
+    return;
+  }
 
   setPty(pty);
 
@@ -302,6 +323,31 @@ function handleChat(ws, projectId, prompt, setPty) {
     }));
     sendModifiedFiles(ws, project.path);
   });
+}
+
+// Find an executable in PATH or common locations
+function findExecutable(name) {
+  // First try which
+  try {
+    const result = execSync(`which ${name}`, { encoding: 'utf-8' }).trim();
+    if (result) return result;
+  } catch {}
+  
+  // Check common locations
+  const commonPaths = [
+    `/usr/local/bin/${name}`,
+    `/opt/homebrew/bin/${name}`,
+    `${process.env.HOME}/.local/bin/${name}`,
+    `${process.env.HOME}/.npm-global/bin/${name}`,
+  ];
+  
+  for (const p of commonPaths) {
+    try {
+      if (existsSync(p)) return p;
+    } catch {}
+  }
+  
+  return null;
 }
 
 function handleUndo(ws, projectId) {
