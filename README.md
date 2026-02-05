@@ -2,43 +2,46 @@
 
 > AI-powered code editing for non-developers. Ask for changes in plain English, see them live.
 
-![Demo](demo.gif)
-
 ## What is this?
 
-A simple web interface that lets non-technical people edit code by chatting with AI. Think "ChatGPT but it actually edits your codebase."
+A web interface that lets anyone edit code by chatting with AI. No IDE needed.
 
 **Perfect for:**
 - CEOs who want to tweak the landing page
 - Designers who want to adjust CSS
 - Product managers who want to fix typos
-- Anyone who shouldn't need to open an IDE
+- Anyone who shouldn't need to learn git
+
+## Features
+
+- 🗣️ **Natural language editing** — "Add a login button to the header"
+- 👀 **Live preview** — See changes instantly
+- 🔐 **Access control** — Per-user keys with project permissions
+- ↩️ **Undo** — One-click revert
+- 📁 **Multi-project** — Manage multiple codebases
+- 🌐 **Remote access** — Share via Cloudflare Tunnel
 
 ## Quick Start
 
 ```bash
-# 1. Clone and install
-git clone https://github.com/yourusername/code-chat.git
+# Clone and install
+git clone https://github.com/vonwao/code-chat.git
 cd code-chat
 npm install
 
-# 2. Configure projects
+# Configure
 cp config.example.json config.json
-# Edit config.json with your projects
+# Edit config.json (see below)
 
-# 3. Start your project's dev server (in another terminal)
-cd /path/to/your/project
-npm run dev  # or: vite, next dev, etc.
-
-# 4. Start Code Chat
+# Start
 npm start
 
-# 5. Open http://localhost:3000
+# Open http://localhost:3000
 ```
 
 ## Configuration
 
-Create `config.json`:
+### Basic Setup
 
 ```json
 {
@@ -46,28 +49,79 @@ Create `config.json`:
   "projects": [
     {
       "id": "my-app",
-      "name": "My Startup App",
-      "path": "/Users/me/code/my-app",
-      "previewUrl": "http://localhost:5173"
+      "name": "My App",
+      "path": "/path/to/your/project",
+      "previewUrl": "http://localhost:5173",
+      "devCommand": "npm run dev"
     }
   ]
 }
 ```
 
+### With Authentication (Recommended)
+
+```json
+{
+  "port": 3000,
+  "auth": {
+    "enabled": true,
+    "keys": {
+      "friend-key-123": {
+        "name": "Friend",
+        "projects": ["demo"]
+      },
+      "ceo-key-456": {
+        "name": "CEO",
+        "projects": ["company-site"]
+      },
+      "admin-key-789": {
+        "name": "Admin",
+        "projects": "*"
+      }
+    }
+  },
+  "projects": [
+    {
+      "id": "demo",
+      "name": "Demo Project",
+      "path": "/path/to/demo",
+      "previewUrl": "http://localhost:3001",
+      "devCommand": "npm run dev"
+    },
+    {
+      "id": "company-site",
+      "name": "Company Website",
+      "path": "/path/to/company-site",
+      "previewUrl": "http://localhost:5173",
+      "devCommand": "npm run dev"
+    }
+  ]
+}
+```
+
+### Config Reference
+
 | Field | Description |
 |-------|-------------|
-| `id` | Unique identifier (no spaces) |
-| `name` | Display name in the dropdown |
-| `path` | Absolute path to project directory |
-| `previewUrl` | URL where the dev server runs |
+| `port` | Server port (default: 3000) |
+| `auth.enabled` | Enable access keys |
+| `auth.keys` | Object mapping keys to user info |
+| `auth.keys.*.name` | Display name shown in UI |
+| `auth.keys.*.projects` | Array of project IDs, or `"*"` for all |
+| `projects[].id` | Unique identifier (no spaces) |
+| `projects[].name` | Display name in dropdown |
+| `projects[].path` | Absolute path to project |
+| `projects[].previewUrl` | URL where dev server runs |
+| `projects[].devCommand` | Command to start dev server (optional) |
 
 ## Requirements
 
 - **Node.js 18+**
-- **Claude CLI** (`claude`) installed and authenticated
-  - Install: `npm install -g @anthropic-ai/claude-cli`
-  - Auth: `claude auth`
-- **Your project's dev server running** (Vite, Next.js, etc.)
+- **Claude CLI** installed and authenticated:
+  ```bash
+  npm install -g @anthropic-ai/claude-code
+  claude auth
+  ```
 
 ## How It Works
 
@@ -77,110 +131,154 @@ Create `config.json`:
 │  ┌─────────────────────┐  ┌─────────────────────────────┐   │
 │  │     Chat Panel      │  │      Live Preview           │   │
 │  │                     │  │                             │   │
-│  │  "Make the button   │  │   ┌─────────────────────┐  │   │
-│  │   bigger and blue"  │  │   │                     │  │   │
-│  │                     │  │   │   Your App          │  │   │
-│  │  AI: "Done! I       │  │   │   (auto-refreshes)  │  │   │
-│  │   changed..."       │  │   │                     │  │   │
-│  └─────────────────────┘  │   └─────────────────────┘  │   │
-└───────────────┬───────────┴─────────────┬───────────────────┘
-                │                         │
-                ▼                         │
-┌───────────────────────────┐             │
-│  Code Chat Server         │             │
-│  - Runs Claude CLI        │─────────────┘
-│  - Edits your codebase    │      (iframe to dev server)
+│  │  "Make the button   │  │      Your App               │   │
+│  │   bigger and blue"  │  │      (auto-refreshes)       │   │
+│  │                     │  │                             │   │
+│  │  AI: "Done! I       │  │                             │   │
+│  │   changed..."       │  │                             │   │
+│  └─────────────────────┘  └─────────────────────────────┘   │
+└───────────────┬─────────────────────────────────────────────┘
+                │
+                ▼
+┌───────────────────────────┐
+│  Code Chat Server         │
+│  - Runs Claude Code       │
+│  - Edits your files       │
+│  - Dev server auto-starts │
 └───────────────────────────┘
 ```
 
-1. You type a request in the chat
-2. Server runs Claude Code in your project directory
+1. User types a request in plain English
+2. Server runs Claude Code in the project directory
 3. Claude edits the files
-4. Your dev server hot-reloads
+4. Dev server hot-reloads
 5. Preview updates automatically
 
-## Features
+## Remote Access
 
-- **🗣️ Natural language editing** — "Add a login button to the header"
-- **👀 Live preview** — See changes instantly
-- **↩️ Undo** — One-click undo last change
-- **⏹️ Cancel** — Stop AI mid-task
-- **📁 Multi-project** — Switch between projects
-- **🔄 Streaming** — See AI's progress in real-time
-
-## Remote Access (Team Setup)
-
-For remote team members to access Code Chat on your Mac mini:
-
-### Option 1: Tailscale (Recommended)
+### Option 1: Quick Test (No Domain)
 
 ```bash
-# On Mac mini
+# Install cloudflared
+brew install cloudflared
+
+# Start code-chat
+npm start
+
+# Create temporary tunnel (new terminal)
+cloudflared tunnel --url http://localhost:3000
+# Gives you: https://random-words.trycloudflare.com
+```
+
+Share that URL — works on phones, any browser.
+
+### Option 2: Your Own Domain
+
+See **[docs/CLOUDFLARE-SETUP.md](docs/CLOUDFLARE-SETUP.md)** for full instructions.
+
+Quick version:
+```bash
+# One-time setup
+cloudflared tunnel login
+cloudflared tunnel create codechat
+cloudflared tunnel route dns codechat yourdomain.com
+
+# Create ~/.cloudflared/config.yml (see docs)
+
+# Run
+cloudflared tunnel run codechat
+```
+
+### Option 3: Tailscale (Private Network)
+
+```bash
+# Install on your machine
 brew install tailscale
 tailscale up
-# Note the IP: tailscale ip -4
 
-# Teammates install Tailscale, join your network
-# Then access: http://100.x.x.x:3000
+# Share the Tailscale IP with teammates
+tailscale ip -4  # e.g., 100.64.0.1
+
+# They access: http://100.64.0.1:3000
 ```
 
-### Option 2: Cloudflare Tunnel
+Requires Tailscale app on each device.
 
-```bash
-# On Mac mini
-brew install cloudflared
-cloudflared tunnel login
-cloudflared tunnel create code-chat
-cloudflared tunnel route dns code-chat chat.yourdomain.com
+## Deployment
 
-# Run tunnel
-cloudflared tunnel run --url http://localhost:3000 code-chat
+For running as a persistent service, see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**:
+- macOS launchd setup
+- Auto-restart on crash
+- Log management
 
-# Teammates access: https://chat.yourdomain.com
+## Weldr Integration (Optional)
+
+[Weldr](https://github.com/vonwao/weldr-v3) provides real-time sync between multiple editors. If installed:
+
+```json
+{
+  "weldr": {
+    "syncUrl": "ws://localhost:9876",
+    "syncToken": "your-token"
+  }
+}
 ```
 
-For detailed deployment instructions including launchd setup, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Code Chat will:
+- Start weldr daemon for each project
+- Show sync status in UI
+- Auto-commit changes
 
 ## Tips
 
-### For the best experience:
+### Be Specific
+- ✅ "Make the Submit button blue (#3B82F6)"
+- ❌ "Change the button"
 
-1. **Be specific** — "Make the Submit button blue" > "Change the button"
-2. **Reference files** — "In the header component, add..." 
-3. **One thing at a time** — Multiple changes = multiple messages
-4. **Use Undo liberally** — It's cheap, mistakes happen
+### Reference Files
+- ✅ "In src/components/Header.tsx, add a login link"
+- ❌ "Add a login link somewhere"
 
-### Example prompts:
+### One Thing at a Time
+Multiple changes = multiple messages for best results.
 
-- "Change the heading on the homepage to 'Welcome to Acme'"
+### Example Prompts
+- "Change the heading to 'Welcome to Acme'"
 - "Make the primary button color #3B82F6"
-- "Add a 'Contact Us' link to the navigation"
-- "Fix the typo 'recieve' → 'receive' on the pricing page"
-- "Add padding to the cards on the features section"
+- "Add padding of 20px to the cards"
+- "Fix the typo 'recieve' → 'receive'"
+- "Add a Contact link to the navigation"
 
 ## Troubleshooting
 
 ### "Claude not found"
-
-Install Claude CLI:
 ```bash
-npm install -g @anthropic-ai/claude-cli
+npm install -g @anthropic-ai/claude-code
 claude auth
 ```
 
-### Preview not loading
-
-Make sure your project's dev server is running:
-```bash
-cd /path/to/project
-npm run dev
-```
+### Preview shows "Connection Refused"
+Your project's dev server isn't running. Code Chat tries to auto-start it if `devCommand` is configured. Check the terminal for errors.
 
 ### Changes not appearing
+1. Hard refresh (Cmd+Shift+R)
+2. Check dev server hasn't crashed
+3. Check browser console for errors
 
-1. Check the dev server hasn't crashed
-2. Try a hard refresh (Cmd+Shift+R)
-3. Check the console for errors
+### Auth not working
+Make sure `config.json` has:
+```json
+{
+  "auth": {
+    "enabled": true,
+    "keys": { ... }
+  }
+}
+```
+
+## Contributing
+
+PRs welcome! See [TASKS.md](TASKS.md) for planned features.
 
 ## License
 
