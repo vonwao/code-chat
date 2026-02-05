@@ -139,6 +139,8 @@ cloudflared tunnel run --url http://localhost:3000 code-chat
 # Teammates access: https://chat.yourdomain.com
 ```
 
+For detailed deployment instructions including launchd setup, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## Tips
 
 ### For the best experience:
