@@ -185,21 +185,97 @@ Improve dev server reliability:
 ---
 🎯 **Milestone 4 complete:** Users can see system status and troubleshoot issues
 
-## 🏁 Milestone 5: Enhanced UX
-- Diff viewer for changes
-- Undo history (multiple undos)
-- File browser sidebar
-- Syntax highlighting in chat
+## 🏁 Milestone 5: Bug Fixes & Polish
 
-## 🏁 Milestone 5: Multi-User
-- User identification
-- "Alice is editing..." presence
-- Activity log
-- Notifications
+### T12: Add postinstall script for node-pty rebuild @claude
+**Priority:** High
+**Artifacts:** package.json (modified), README.md (modified)
+**Commit:** `fix: add postinstall script for node-pty`
+
+Problem: node-pty native module fails with "posix_spawnp failed" on fresh installs or after Node upgrades.
+
+Solution: Add to package.json:
+```json
+"scripts": {
+  "postinstall": "npm rebuild node-pty --build-from-source"
+}
+```
+
+Also update README with troubleshooting section.
+
+### T13: Make weldr sync truly optional @claude
+**Priority:** Medium
+**Artifacts:** src/weldr.js (modified), src/server.js (modified)
+**Commit:** `fix: make weldr sync optional, reduce log spam`
+
+Current: Even with no sync server, weldr manager logs reconnection errors constantly.
+
+Fix:
+1. If `weldr.syncUrl` is empty/missing in config, skip all sync logic
+2. If sync URL is configured but server unreachable, reduce retry frequency (exponential backoff)
+3. Add clear log message: "Weldr sync disabled (no server configured)"
+
+### T14: Delay health checks during startup @codex
+**Priority:** Low
+**Artifacts:** src/health.js (modified)
+**Commit:** `fix: delay health checks during startup`
+
+Don't run health checks on servers that are in "starting" state.
+Wait at least 30 seconds after startup before first health check.
+
+### T15: Investigate iframe preview issues @claude
+**Priority:** High
+**Artifacts:** docs/ISSUES.md (updated), possibly src/server.js
+**Commit:** `docs: document preview iframe requirements`
+
+Some projects don't render in the preview iframe. Investigate:
+1. X-Frame-Options headers from dev servers
+2. Content-Security-Policy restrictions
+3. Mixed content (HTTPS tunnel → HTTP localhost)
+
+Document which frameworks work and which don't.
+Consider adding a proxy endpoint that strips restrictive headers.
+
+---
+
+## 🏁 Milestone 6: Enhanced UX
+
+### T16: File browser sidebar @claude
+Show project file tree in collapsible sidebar.
+Let users click to view file contents (read-only).
+Helps non-technical users understand project structure.
+
+### T17: Diff viewer for changes @codex
+After AI makes changes, show a diff view.
+Side-by-side or inline format.
+Help users understand what changed.
+
+### T18: Undo history (multiple levels) @claude
+Stack of undo states, not just last change.
+Show timeline of changes.
+Let user click to roll back to any point.
+Use git under the hood.
+
+### T19: Preview auto-refresh @codex
+Watch for file changes in project.
+Auto-reload iframe when files change.
+Debounce to avoid constant reloads during AI edits.
+
+---
+
+## 🏁 Milestone 7: Multi-User
+
+### T20: User presence indicators
+Show "Alice is viewing..." in UI.
+Track which users are connected to which projects.
+
+### T21: Activity log
+Show recent activity: "Alice changed header.tsx 5 min ago"
+Useful for async collaboration.
 
 ---
 
 ## In Progress
 
 ## Done
-- T1 ✅
+- T1 ✅ T2 ✅ T3 ✅ T4 ✅ T5 ✅ T6 ✅ T7 ✅ T8 ✅
