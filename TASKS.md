@@ -110,7 +110,82 @@ Document:
 
 ## Future Milestones (Not Yet Detailed)
 
-## 🏁 Milestone 4: Enhanced UX
+## 🏁 Milestone 4: Settings & Info Panel
+
+### T9: Settings/Info panel UI @claude
+**Depends:** T6, T7
+**Artifacts:** public/index.html (modified), src/server.js (modified)
+**Commit:** `feat: settings and info panel`
+
+Add a collapsible settings/info panel (gear icon in header):
+
+**Project Info Section:**
+- List all configured projects
+- For each project show:
+  - Name and local path
+  - Dev server status (🟢 Running / 🔴 Stopped / 🟡 Starting)
+  - Dev server URL + port
+  - Restart dev server button
+
+**Weldr Integration Section:**
+- For selected project show:
+  - Weldr daemon status (🟢 Running / 🔴 Not running)
+  - Sync status (connected/disconnected/local-only)
+  - Sync server URL
+  - Last sync timestamp
+  - Pending changes count
+
+**System Info Section:**
+- code-chat version
+- Node.js version
+- weldr version (if installed)
+- Uptime
+
+Use existing APIs:
+- `GET /api/projects/:id/sync-status`
+- `GET /api/projects/:id/devserver-status`
+- `POST /api/projects/:id/devserver-restart`
+
+### T10: API endpoint for system info @codex
+**Depends:** T9
+**Artifacts:** src/server.js (modified)
+**Commit:** `feat: system info API`
+
+Add `GET /api/system-info` returning:
+```json
+{
+  "version": "0.1.0",
+  "nodeVersion": "22.0.0",
+  "weldrVersion": "0.1.0",
+  "uptime": 3600,
+  "projects": [
+    {
+      "id": "neudelta",
+      "name": "NeuDelta",
+      "path": "/path/to/project",
+      "devServer": { "status": "running", "url": "http://localhost:5000" },
+      "weldr": { "daemonRunning": true, "syncStatus": "connected", "lastSync": "..." }
+    }
+  ]
+}
+```
+
+### T11: Fix dev server preview connection @codex
+**Depends:** T6
+**Artifacts:** src/devserver.js (modified), public/index.html (modified)
+**Commit:** `fix: dev server preview reliability`
+
+Improve dev server reliability:
+1. Better startup detection (wait for actual HTTP response)
+2. Show loading state in preview while server starts
+3. Retry preview load after dev server becomes ready
+4. Show helpful error message if dev server fails to start
+5. Add manual refresh button for preview
+
+---
+🎯 **Milestone 4 complete:** Users can see system status and troubleshoot issues
+
+## 🏁 Milestone 5: Enhanced UX
 - Diff viewer for changes
 - Undo history (multiple undos)
 - File browser sidebar
